@@ -72,7 +72,7 @@
             zip.file(file.name,archive.read(file))
         }
         await archive.status("Generating zip")
-        await zip.generateAsync({type:"blob"})
+        var content = await zip.generateAsync({type:"blob"})
         await archive.status("Downloading zip")
         console.log(content)
         location.replace(URL.createObjectURL(content))
