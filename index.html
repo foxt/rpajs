@@ -1,0 +1,108 @@
+<script src="rpa.js"></script>
+<b id="status">Upload a RPA archive</b>
+<input type="file">
+<select id="sort" onchange="renderFiles()">
+    <option>Index order</option>
+    <option value="name">Name order</option>
+    <option value="offset">Offset order</option>
+    <option value="size">Size order</option>
+</select>
+<a href="javascript:downloadAsZip()">Download as Zip</a>
+<div id="files">
+
+</div>
+<img style="pointer-events: none; position:fixed;bottom:0;right:0;z-index: -1; max-width:100vw;max-height: 100vh;"></img>
+<audio></audio>
+<video style="pointer-events: none; position:fixed;bottom:0;right:0;z-index: -1; max-width:100vw;max-height: 100vh;"></video>
+
+    
+    
+<script src="exampleDeps.js"></script>
+<script>
+    //(async() => {
+        //console.log("Downloading archive")
+        //f = await fetch("./MyArchive.rpa")
+        //ab = await f.arrayBuffer()
+        //console.log("Done")
+        //window.archive = new RpaArchive(ab)
+        //console.log(archive)
+    //})()
+    const inputElement = document.querySelector("input");
+    inputElement.addEventListener("change", handleFiles, false);
+
+    function createFile(file,i) {
+        var a = document.createElement('a')
+        var fs = file.size
+        a.innerText = i + ". " + file.name + " (" + (fs > 1000000 ? Math.round(fs/1000000) + "mb" : fs > 1000 ? Math.round(fs/1000) + "kb" : fs + "b") + " at " +" 0x" + file.offset.toString(16) + ")"
+        a.href = "javascript:void"
+        a.onmouseenter = () => {
+            console.log(a)
+            var mime = getMime(file.name.split('.').pop())
+            var rFile = new Blob([archive.read(file)],{type: mime})
+            console.log(rFile)
+            a.href = URL.createObjectURL(rFile)
+            if (mime.startsWith("image")) {
+                document.querySelector("img").src = a.href
+            } else {
+                document.querySelector("img").src = ""
+            } 
+            if (mime.startsWith("audio")) {
+                document.querySelector("audio").src = a.href
+                document.querySelector("audio").play()
+            } else {
+                document.querySelector("audio").pause()
+            } 
+            if (mime.startsWith("video")) {
+                document.querySelector("video").src = a.href
+                document.querySelector("video").play()
+            } else {
+                document.querySelector("video").pause()
+                document.querySelector("video").src = ""
+            } 
+        }
+        a.target ="_blank"
+        document.querySelector("#files").appendChild(a)
+        document.querySelector("#files").appendChild(document.createElement("br"))
+    }
+
+    async function downloadAsZip() {
+        var zip = new JSZip();
+        for (var file of archive.list()) {
+            await archive.status("Adding" + file.name + "to zip")
+            zip.file(file.name,archive.read(file))
+        }
+        await archive.status("Generating zip")
+        await zip.generateAsync({type:"blob"})
+        await archive.status("Downloading zip")
+        console.log(content)
+        location.replace(URL.createObjectURL(content))
+        window.zip = zip
+    }
+    function renderFiles() {
+        document.querySelector("#files").innerHTML = ""
+        var i = 0;
+        var files = archive.list()
+        var sort = document.querySelector("select").value
+        if (sort == "name") {
+            files.sort((a,b) => a.name.localeCompare(b.name))
+        } else if (sort == "offset") {
+            files.sort((a,b) => Number(a.offset) - Number(b.offset))
+        } else if (sort == "size") {
+            files.sort((a,b) => a.size - b.size)
+        }
+        for (var file of files) {
+            i++;
+            createFile(file,i)
+        }
+    }
+    async function handleFiles() {
+        var file = this.files[0]
+        archive = new RpaArchive(file, (status)=>{
+            document.querySelector("#status").innerText = status
+            return new Promise(a=>setTimeout(a))
+        })
+        await archive.ready
+        console.log(archive)
+        renderFiles()
+    }
+</script>
