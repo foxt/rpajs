@@ -8,6 +8,7 @@
     <option value="size">Size order</option>
 </select>
 <a href="javascript:downloadAsZip()">Download as Zip</a>
+<a href="javascript:saveToDisk()">Save to disk</a>
 <div id="files">
 
 </div>
@@ -72,12 +73,71 @@
             zip.file(file.name,archive.read(file))
         }
         await archive.status("Generating zip")
-        var content = await zip.generateAsync({type:"blob"})
+        await zip.generateAsync({type:"blob"})
         await archive.status("Downloading zip")
         console.log(content)
         location.replace(URL.createObjectURL(content))
         window.zip = zip
     }
+
+
+    async function saveToDisk() {
+        await archive.status("Requesting access to folder...")
+        if (typeof window["showDirectoryPicker"] !== "function") {
+            await archive.status("Browser not supported")
+            return open("https://developer.mozilla.org/en-US/docs/Web/API/Window/showDirectoryPicker#browser_compatibility")
+        }
+        try {
+            var dir = await window.showDirectoryPicker()
+            await archive.status("Preparing tree...")
+
+
+            var list = archive.list()
+            var tree = tree || {}   
+
+            for (var file of list) {
+                var pth = file.name
+                var parts = pth.split("/")
+                var node = tree
+                for (var i = 0; i < parts.length; i++) {
+                    var part = parts[i]
+                    if (!node[part]) node[part] = {}
+                    if (i == parts.length - 1) node[part] = file;
+                    node = node[part]
+                }
+            }
+            while (Object.keys(tree).length == 1) tree = tree[Object.keys(tree)[0]]
+            while (typeof tree == "string") tree = {
+                [tree.split("/").pop()]: tree
+            }
+        
+            async function saveFile(twig,dir) {
+                for (var leaf in twig)  {
+                    var file = twig[leaf]
+                    if (Object.keys(file).length == 3 && file.name && file.offset && file.size) {
+                        await archive.status("Saving " + file.name)
+                        var node = await dir.getFileHandle(leaf, {create: true})
+                        var stream = await node.createWritable({keepExistingData: true})
+                        var blob = await archive.read(file)
+                        await stream.write(blob)
+                        await stream.close()
+                    } else {
+                        await archive.status("Making " + leaf)
+                        let ndir = await dir.getDirectoryHandle(leaf, {create: true})
+                        saveFile(file,ndir)
+                    }
+                } 
+            }
+            await saveFile(tree,dir)
+            await archive.status("Done")
+
+        } catch(e) {
+            console.error(e)
+            await archive.status("Error: " + e)
+            return
+        }
+    }
+
     function renderFiles() {
         document.querySelector("#files").innerHTML = ""
         var i = 0;
